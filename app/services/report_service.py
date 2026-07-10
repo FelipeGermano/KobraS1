@@ -35,19 +35,19 @@ def save_summary(summary: dict, output_dir: str | Path = "logs") -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = destination / f"kobra_s1_summary_{stamp}.json"
     output_path.write_text(
-        json.dumps(_to_json_safe(summary), ensure_ascii=False, indent=2),
+        json.dumps(to_json_safe(summary), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return output_path
 
 
-def _to_json_safe(value: Any) -> Any:
+def to_json_safe(value: Any) -> Any:
     if is_dataclass(value):
-        return _to_json_safe(asdict(value))
+        return to_json_safe(asdict(value))
     if isinstance(value, dict):
-        return {str(key): _to_json_safe(item) for key, item in value.items()}
+        return {str(key): to_json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple, set)):
-        return [_to_json_safe(item) for item in value]
+        return [to_json_safe(item) for item in value]
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, np.generic):

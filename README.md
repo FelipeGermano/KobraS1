@@ -13,6 +13,7 @@ Esta versao 0.1 entrega:
 - perfis iniciais de PLA, PETG, ABS, ASA e TPU;
 - regras de resistencia e qualidade;
 - resumo de parametros em JSON;
+- exportacao de projeto 3MF com perfil recomendado embutido;
 - interface Tkinter simples.
 
 ## Ambiente local
@@ -48,3 +49,13 @@ Neste workspace, o `.venv` ja foi criado para teste local.
 
 - `samples/calibration_cube_ascii.stl`
 - `samples/foreign_printer_cube.3mf`
+
+## Exportacao 3MF
+
+O botao `Exportar 3MF com perfil` gera um projeto `.3mf` com:
+
+- geometria do STL ou 3MF original;
+- `Metadata/project_settings.config` com parametros recomendados para a Kobra S1;
+- `Metadata/kobra_s1_summary.json` com o resumo completo das decisoes.
+
+Abra o arquivo exportado no slicer e confira a pre-visualizacao antes de imprimir.

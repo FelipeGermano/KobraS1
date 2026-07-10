@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 from app.domain.material import MATERIALS
 from app.domain.slicing_profile import UserChoices
 from app.services.profile_engine import QUALITY_RULES, STRENGTH_RULES, build_profile
+from app.services.project_export_service import ProjectExportError, export_recommended_3mf
 from app.services.report_service import build_summary, save_summary
 from app.services.model_import_service import ModelImportError, analyze_model
 
@@ -63,7 +64,10 @@ class MainWindow(tk.Tk):
             wraplength=700,
         ).pack(fill=tk.BOTH, expand=True)
 
-        ttk.Button(root, text="Gerar resumo JSON", command=self._generate_summary).pack(anchor=tk.E, pady=(12, 0))
+        actions = ttk.Frame(root)
+        actions.pack(anchor=tk.E, pady=(12, 0))
+        ttk.Button(actions, text="Gerar resumo JSON", command=self._generate_summary).pack(side=tk.LEFT)
+        ttk.Button(actions, text="Exportar 3MF com perfil", command=self._export_project).pack(side=tk.LEFT, padx=(8, 0))
 
     def _combo(self, parent: ttk.Frame, label: str, variable: tk.StringVar, values: list[str]) -> None:
         row = ttk.Frame(parent)
@@ -94,19 +98,11 @@ class MainWindow(tk.Tk):
     def _generate_summary(self) -> None:
         source = self.selected_file.get()
         if not source:
-            messagebox.showerror("Arquivo obrigatorio", "Selecione um arquivo STL antes de gerar o resumo.")
+            messagebox.showerror("Arquivo obrigatorio", "Selecione um arquivo STL ou 3MF antes de gerar o resumo.")
             return
 
         try:
-            analysis = analyze_model(source)
-            choices = UserChoices(
-                material=self.material.get(),
-                strength=self.strength.get(),
-                quality=self.quality.get(),
-                priority=self.priority.get(),
-                supports_allowed=self.supports_allowed.get(),
-            )
-            profile = build_profile(choices, analysis)
+            analysis, choices, profile = self._current_result()
             summary = build_summary(analysis, choices, profile)
             output_path = save_summary(summary, Path("logs"))
         except (ModelImportError, ValueError) as exc:
@@ -115,6 +111,49 @@ class MainWindow(tk.Tk):
 
         self.analysis_text.set(_format_analysis(analysis) + "\n\n" + _format_profile(profile))
         messagebox.showinfo("Resumo gerado", f"Resumo salvo em:\n{output_path}")
+
+    def _export_project(self) -> None:
+        source = self.selected_file.get()
+        if not source:
+            messagebox.showerror("Arquivo obrigatorio", "Selecione um arquivo STL ou 3MF antes de exportar.")
+            return
+
+        default_name = f"{Path(source).stem}_kobra_s1_recomendado.3mf"
+        output = filedialog.asksaveasfilename(
+            title="Salvar 3MF com perfil recomendado",
+            defaultextension=".3mf",
+            initialfile=default_name,
+            filetypes=[("Projeto 3MF", "*.3mf")],
+        )
+        if not output:
+            return
+
+        try:
+            analysis, choices, profile = self._current_result()
+            output_path = export_recommended_3mf(source, output, analysis, choices, profile)
+        except (ModelImportError, ProjectExportError, ValueError) as exc:
+            messagebox.showerror("Nao foi possivel exportar", str(exc))
+            return
+
+        self.analysis_text.set(_format_analysis(analysis) + "\n\n" + _format_profile(profile))
+        messagebox.showinfo(
+            "3MF exportado",
+            "Projeto salvo com o perfil recomendado.\n\n"
+            "Abra o arquivo no slicer e confira a pre-visualizacao antes de imprimir:\n"
+            f"{output_path}",
+        )
+
+    def _current_result(self):
+        analysis = analyze_model(self.selected_file.get())
+        choices = UserChoices(
+            material=self.material.get(),
+            strength=self.strength.get(),
+            quality=self.quality.get(),
+            priority=self.priority.get(),
+            supports_allowed=self.supports_allowed.get(),
+        )
+        profile = build_profile(choices, analysis)
+        return analysis, choices, profile
 
 
 def _format_analysis(analysis) -> str:

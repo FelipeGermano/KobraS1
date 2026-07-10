@@ -6,6 +6,7 @@ pytest-cache-files-*/
 *.pyc
 *.egg-info/
 logs/*.log
+logs/*.json
 dist/
 build/
 *.spec
