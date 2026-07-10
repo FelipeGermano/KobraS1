@@ -61,3 +61,59 @@ def test_strength_priority_increases_walls_and_infill() -> None:
 
     assert profile.walls == 5
     assert profile.infill_percent == 33
+
+
+def test_pla_with_heat_exposure_warns_user() -> None:
+    profile = build_profile(
+        UserChoices(
+            material="PLA",
+            strength="Uso comum",
+            quality="Normal",
+            priority="equilibrio",
+            supports_allowed=True,
+            heat_exposure=True,
+        ),
+        _analysis(),
+    )
+
+    assert any("calor" in warning for warning in profile.warnings)
+
+
+def test_functional_external_use_raises_minimum_strength() -> None:
+    profile = build_profile(
+        UserChoices(
+            material="PETG",
+            strength="Leve",
+            quality="Normal",
+            priority="equilibrio",
+            supports_allowed=True,
+            purpose="externo",
+            environment="externo",
+        ),
+        _analysis(),
+    )
+
+    assert profile.walls >= 4
+    assert profile.infill_percent >= 20
+    assert profile.brim is True
+    assert profile.adhesion_type == "brim"
+    assert profile.decision_reasons
+
+
+def test_rejects_non_default_nozzle_for_mvp() -> None:
+    try:
+        build_profile(
+            UserChoices(
+                material="PLA",
+                strength="Uso comum",
+                quality="Normal",
+                priority="equilibrio",
+                supports_allowed=True,
+                nozzle_diameter_mm=0.6,
+            ),
+            _analysis(),
+        )
+    except ValueError as exc:
+        assert "0,4 mm" in str(exc)
+    else:
+        raise AssertionError("Bico diferente de 0,4 mm deveria ser rejeitado no MVP")

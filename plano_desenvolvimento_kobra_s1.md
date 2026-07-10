@@ -936,15 +936,15 @@ Mitigação:
 - [x] Criar tela inicial.
 - [x] Criar seletor de arquivo.
 - [x] Criar formulário de uso.
-- [ ] Criar tela de análise.
+- [x] Criar tela de análise.
 - [x] Criar tela de resumo.
-- [ ] Criar tela de erros.
-- [ ] Criar configurações do aplicativo.
+- [x] Criar tela de erros.
+- [x] Criar configurações do aplicativo.
 
 ### Integração
 
 - [x] Localizar instalação do fatiador.
-- [ ] Configurar caminho manual.
+- [x] Configurar caminho manual.
 - [x] Testar comandos disponíveis.
 - [ ] Criar adaptador do fatiador.
 - [ ] Abrir modelo com perfil.
@@ -958,7 +958,7 @@ Mitigação:
 - [x] Criar testes de integração.
 - [ ] Executar testes físicos.
 - [ ] Registrar resultados.
-- [ ] Ajustar perfis.
+- [x] Ajustar perfis.
 
 ---
 

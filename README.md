@@ -14,7 +14,7 @@ Esta versao 0.1 entrega:
 - regras de resistencia e qualidade;
 - resumo de parametros em JSON;
 - exportacao de projeto 3MF com perfil recomendado embutido;
-- interface Tkinter simples.
+- interface Tkinter com abas de analise, perfil, erros e configuracoes.
 
 ## Ambiente local
 
@@ -44,6 +44,7 @@ Neste workspace, o `.venv` ja foi criado para teste local.
 - `docs/architecture.md`: arquitetura inicial e regras de seguranca.
 - `docs/slicer_research.md`: pesquisa local do Anycubic Slicer Next.
 - `docs/test_models.md`: arquivos de amostra para testes manuais.
+- `docs/profile_rules.md`: regras atuais do motor de recomendacoes.
 
 ## Amostras
 

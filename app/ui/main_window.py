@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 import tkinter as tk
+import subprocess
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from app.domain.material import MATERIALS
 from app.domain.slicing_profile import UserChoices
-from app.services.profile_engine import QUALITY_RULES, STRENGTH_RULES, build_profile
+from app.services.config_service import load_json_config, save_json_config
+from app.services.profile_engine import (
+    ENVIRONMENTS,
+    PRIORITIES,
+    PURPOSES,
+    QUALITY_RULES,
+    STRENGTH_RULES,
+    STRESS_DIRECTIONS,
+    build_profile,
+)
 from app.services.project_export_service import ProjectExportError, export_recommended_3mf
 from app.services.report_service import build_summary, save_summary
 from app.services.model_import_service import ModelImportError, analyze_model
@@ -24,8 +34,18 @@ class MainWindow(tk.Tk):
         self.strength = tk.StringVar(value="Uso comum")
         self.quality = tk.StringVar(value="Normal")
         self.priority = tk.StringVar(value="equilibrio")
+        self.purpose = tk.StringVar(value="uso comum")
+        self.environment = tk.StringVar(value="interno")
+        self.heat_exposure = tk.BooleanVar(value=False)
+        self.needs_flexibility = tk.BooleanVar(value=False)
+        self.stress_direction = tk.StringVar(value="nao informado")
+        self.copies = tk.IntVar(value=1)
+        self.nozzle = tk.StringVar(value="0.4")
         self.supports_allowed = tk.BooleanVar(value=True)
-        self.analysis_text = tk.StringVar(value="Selecione um arquivo STL ou 3MF para comecar.")
+        settings = load_json_config("app_settings.json")
+        self.slicer_path = tk.StringVar(value=settings.get("slicer_path", ""))
+        self.output_dir = tk.StringVar(value=settings.get("default_output_dir", "exports"))
+        self.auto_open_slicer = tk.BooleanVar(value=bool(settings.get("auto_open_slicer_after_export", False)))
 
         self._build_layout()
 
@@ -44,30 +64,35 @@ class MainWindow(tk.Tk):
         self._combo(form, "Material", self.material, list(MATERIALS))
         self._combo(form, "Resistencia", self.strength, list(STRENGTH_RULES))
         self._combo(form, "Qualidade", self.quality, list(QUALITY_RULES))
-        self._combo(
-            form,
-            "Prioridade",
-            self.priority,
-            ["equilibrio", "economia de material", "resistencia", "qualidade visual", "velocidade"],
-        )
+        self._combo(form, "Prioridade", self.priority, PRIORITIES)
+        self._combo(form, "Finalidade", self.purpose, PURPOSES)
+        self._combo(form, "Ambiente", self.environment, ENVIRONMENTS)
+        self._combo(form, "Esforco", self.stress_direction, STRESS_DIRECTIONS)
+        numeric = ttk.Frame(form)
+        numeric.pack(fill=tk.X, pady=3)
+        ttk.Label(numeric, text="Copias", width=14).pack(side=tk.LEFT)
+        ttk.Spinbox(numeric, from_=1, to=99, textvariable=self.copies, width=8).pack(side=tk.LEFT)
+        ttk.Label(numeric, text="Bico", width=8).pack(side=tk.LEFT, padx=(12, 0))
+        ttk.Combobox(numeric, textvariable=self.nozzle, values=["0.4"], state="readonly", width=8).pack(side=tk.LEFT)
         ttk.Checkbutton(form, text="Permitir suportes quando recomendados", variable=self.supports_allowed).pack(
             anchor=tk.W, pady=(6, 0)
         )
+        ttk.Checkbutton(form, text="Exposto a calor/sol", variable=self.heat_exposure).pack(anchor=tk.W)
+        ttk.Checkbutton(form, text="Precisa ser flexivel", variable=self.needs_flexibility).pack(anchor=tk.W)
 
-        analysis_box = ttk.LabelFrame(root, text="Resumo", padding=12)
-        analysis_box.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(
-            analysis_box,
-            textvariable=self.analysis_text,
-            justify=tk.LEFT,
-            anchor=tk.NW,
-            wraplength=700,
-        ).pack(fill=tk.BOTH, expand=True)
+        self.tabs = ttk.Notebook(root)
+        self.tabs.pack(fill=tk.BOTH, expand=True)
+        self.analysis_view = self._text_tab("Analise")
+        self.profile_view = self._text_tab("Perfil")
+        self.error_view = self._text_tab("Erros")
+        self.settings_view = self._settings_tab()
+        self._set_text(self.analysis_view, "Selecione um arquivo STL ou 3MF para comecar.")
 
         actions = ttk.Frame(root)
         actions.pack(anchor=tk.E, pady=(12, 0))
         ttk.Button(actions, text="Gerar resumo JSON", command=self._generate_summary).pack(side=tk.LEFT)
         ttk.Button(actions, text="Exportar 3MF com perfil", command=self._export_project).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(actions, text="Salvar configuracoes", command=self._save_settings).pack(side=tk.LEFT, padx=(8, 0))
 
     def _combo(self, parent: ttk.Frame, label: str, variable: tk.StringVar, values: list[str]) -> None:
         row = ttk.Frame(parent)
@@ -76,6 +101,28 @@ class MainWindow(tk.Tk):
         ttk.Combobox(row, textvariable=variable, values=values, state="readonly").pack(
             side=tk.LEFT, fill=tk.X, expand=True
         )
+
+    def _text_tab(self, title: str) -> tk.Text:
+        frame = ttk.Frame(self.tabs, padding=8)
+        self.tabs.add(frame, text=title)
+        text = tk.Text(frame, wrap=tk.WORD, height=12)
+        text.pack(fill=tk.BOTH, expand=True)
+        return text
+
+    def _settings_tab(self) -> ttk.Frame:
+        frame = ttk.Frame(self.tabs, padding=12)
+        self.tabs.add(frame, text="Configuracoes")
+        row = ttk.Frame(frame)
+        row.pack(fill=tk.X, pady=4)
+        ttk.Label(row, text="Fatiador", width=14).pack(side=tk.LEFT)
+        ttk.Entry(row, textvariable=self.slicer_path).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(row, text="Procurar", command=self._select_slicer).pack(side=tk.LEFT, padx=(8, 0))
+        row = ttk.Frame(frame)
+        row.pack(fill=tk.X, pady=4)
+        ttk.Label(row, text="Saida padrao", width=14).pack(side=tk.LEFT)
+        ttk.Entry(row, textvariable=self.output_dir).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Checkbutton(frame, text="Abrir slicer apos exportar", variable=self.auto_open_slicer).pack(anchor=tk.W, pady=6)
+        return frame
 
     def _select_file(self) -> None:
         path = filedialog.askopenfilename(
@@ -86,14 +133,24 @@ class MainWindow(tk.Tk):
             self.selected_file.set(path)
             self._refresh_analysis()
 
+    def _select_slicer(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Selecione o executavel do slicer",
+            filetypes=[("Executavel", "*.exe"), ("Todos os arquivos", "*.*")],
+        )
+        if path:
+            self.slicer_path.set(path)
+
     def _refresh_analysis(self) -> None:
         try:
             analysis = analyze_model(self.selected_file.get())
         except ModelImportError as exc:
-            self.analysis_text.set(str(exc))
+            self._show_error(str(exc))
             return
 
-        self.analysis_text.set(_format_analysis(analysis))
+        self._set_text(self.analysis_view, _format_analysis(analysis))
+        self._set_text(self.profile_view, "Preencha as opcoes e gere o resumo ou exporte o 3MF.")
+        self._set_text(self.error_view, _format_issues(analysis))
 
     def _generate_summary(self) -> None:
         source = self.selected_file.get()
@@ -109,7 +166,9 @@ class MainWindow(tk.Tk):
             messagebox.showerror("Nao foi possivel gerar", str(exc))
             return
 
-        self.analysis_text.set(_format_analysis(analysis) + "\n\n" + _format_profile(profile))
+        self._set_text(self.analysis_view, _format_analysis(analysis))
+        self._set_text(self.profile_view, _format_profile(profile))
+        self._set_text(self.error_view, _format_issues(analysis, profile))
         messagebox.showinfo("Resumo gerado", f"Resumo salvo em:\n{output_path}")
 
     def _export_project(self) -> None:
@@ -135,25 +194,71 @@ class MainWindow(tk.Tk):
             messagebox.showerror("Nao foi possivel exportar", str(exc))
             return
 
-        self.analysis_text.set(_format_analysis(analysis) + "\n\n" + _format_profile(profile))
+        self._set_text(self.analysis_view, _format_analysis(analysis))
+        self._set_text(self.profile_view, _format_profile(profile))
+        self._set_text(self.error_view, _format_issues(analysis, profile))
         messagebox.showinfo(
             "3MF exportado",
             "Projeto salvo com o perfil recomendado.\n\n"
             "Abra o arquivo no slicer e confira a pre-visualizacao antes de imprimir:\n"
             f"{output_path}",
         )
+        self._open_slicer_if_requested(output_path)
 
     def _current_result(self):
         analysis = analyze_model(self.selected_file.get())
+        try:
+            copies = int(self.copies.get())
+            nozzle = float(self.nozzle.get())
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Copias e bico devem ser numeros validos.") from exc
         choices = UserChoices(
             material=self.material.get(),
             strength=self.strength.get(),
             quality=self.quality.get(),
             priority=self.priority.get(),
             supports_allowed=self.supports_allowed.get(),
+            purpose=self.purpose.get(),
+            environment=self.environment.get(),
+            heat_exposure=self.heat_exposure.get(),
+            needs_flexibility=self.needs_flexibility.get(),
+            stress_direction=self.stress_direction.get(),
+            copies=copies,
+            nozzle_diameter_mm=nozzle,
         )
         profile = build_profile(choices, analysis)
         return analysis, choices, profile
+
+    def _save_settings(self) -> None:
+        save_json_config(
+            "app_settings.json",
+            {
+                "slicer_path": self.slicer_path.get(),
+                "default_output_dir": self.output_dir.get() or "exports",
+                "auto_open_slicer_after_export": self.auto_open_slicer.get(),
+            },
+        )
+        messagebox.showinfo("Configuracoes", "Configuracoes salvas.")
+
+    def _set_text(self, widget: tk.Text, content: str) -> None:
+        widget.configure(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        widget.insert(tk.END, content)
+        widget.configure(state=tk.DISABLED)
+
+    def _show_error(self, content: str) -> None:
+        self._set_text(self.error_view, content)
+        self.tabs.select(self.error_view.master)
+        messagebox.showerror("Erro", content)
+
+    def _open_slicer_if_requested(self, output_path: Path) -> None:
+        if not self.auto_open_slicer.get():
+            return
+        slicer = Path(self.slicer_path.get())
+        if not slicer.exists():
+            self._show_error("O caminho do slicer configurado nao existe.")
+            return
+        subprocess.Popen([str(slicer), str(output_path)])
 
 
 def _format_analysis(analysis) -> str:
@@ -176,6 +281,8 @@ def _format_analysis(analysis) -> str:
 
 def _format_profile(profile) -> str:
     warnings = "\n".join(f"- {warning}" for warning in profile.warnings) or "- Nenhum aviso."
+    reasons = "\n".join(f"- {reason}" for reason in profile.decision_reasons) or "- Sem justificativas."
+    weight = f"{profile.estimated_weight_g:.2f} g" if profile.estimated_weight_g is not None else "indisponivel"
     return (
         "Perfil recomendado:\n"
         f"Material: {profile.material}\n"
@@ -185,10 +292,22 @@ def _format_profile(profile) -> str:
         f"Preenchimento: {profile.infill_percent}% {profile.infill_pattern}\n"
         f"Topo/fundo: {profile.top_bottom_layers} camadas\n"
         f"Velocidade base: {profile.speed_mm_s} mm/s\n"
-        f"Brim: {'sim' if profile.brim else 'nao'}\n"
-        f"Suportes: {'sim' if profile.supports else 'nao'}\n"
+        f"Aderencia: {profile.adhesion_type}\n"
+        f"Suportes: {'sim' if profile.supports else 'nao'} ({profile.support_style})\n"
+        f"Peso estimado: {weight}\n"
+        f"Justificativas:\n{reasons}\n"
         f"Avisos finais:\n{warnings}"
     )
+
+
+def _format_issues(analysis, profile=None) -> str:
+    issue_lines = [
+        f"- [{issue.severity}] {issue.code}: {issue.message}"
+        for issue in analysis.issues
+    ]
+    if profile is not None:
+        issue_lines.extend(f"- [perfil] {warning}" for warning in profile.warnings)
+    return "\n".join(issue_lines) or "Nenhum erro ou aviso relevante."
 
 
 def run_app() -> None:
