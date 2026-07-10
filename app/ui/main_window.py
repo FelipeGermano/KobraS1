@@ -391,11 +391,32 @@ def _format_slice_result(result) -> str:
         lines.extend(["", "STDOUT:", result.command_result.stdout.strip()])
     if result.command_result.stderr.strip():
         lines.extend(["", "STDERR:", result.command_result.stderr.strip()])
+    diagnosis = _friendly_slice_diagnosis(result)
+    if diagnosis:
+        lines.extend(["", "Diagnostico:", diagnosis])
     if result.command_result.generated_files:
         lines.append("")
         lines.append("Arquivos gerados:")
         lines.extend(f"- {path}" for path in result.command_result.generated_files)
     return "\n".join(lines)
+
+
+def _friendly_slice_diagnosis(result) -> str:
+    combined = f"{result.command_result.stdout}\n{result.command_result.stderr}".lower()
+    if result.gcode_path is None and "crash reporter" in combined:
+        return (
+            "O Anycubic Slicer Next falhou durante o fatiamento automatico deste modelo. "
+            "O projeto 3MF foi gerado, mas nenhum G-code valido saiu do CLI. "
+            "Use 'Abrir no slicer' e faca o fatiamento manual pela interface grafica."
+        )
+    if result.gcode_path is None and "no such file" in combined:
+        return (
+            "O slicer nao conseguiu encontrar um arquivo necessario durante a execucao por linha de comando. "
+            "Tente exportar o 3MF e abrir manualmente no slicer."
+        )
+    if result.validation is not None and not result.validation.is_valid:
+        return "O G-code foi criado, mas falhou na validacao de seguranca do assistente."
+    return ""
 
 
 def run_app() -> None:
