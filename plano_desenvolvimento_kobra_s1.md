@@ -946,10 +946,10 @@ Mitigação:
 - [x] Localizar instalação do fatiador.
 - [x] Configurar caminho manual.
 - [x] Testar comandos disponíveis.
-- [ ] Criar adaptador do fatiador.
-- [ ] Abrir modelo com perfil.
-- [ ] Capturar erros do processo.
-- [ ] Registrar saída em log.
+- [x] Criar adaptador do fatiador.
+- [x] Abrir modelo com perfil.
+- [x] Capturar erros do processo.
+- [x] Registrar saída em log.
 
 ### Testes
 

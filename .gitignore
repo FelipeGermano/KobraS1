@@ -9,4 +9,5 @@ logs/*.log
 logs/*.json
 dist/
 build/
+exports/
 *.spec

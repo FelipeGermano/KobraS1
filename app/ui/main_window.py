@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import tkinter as tk
-import subprocess
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -20,6 +19,8 @@ from app.services.profile_engine import (
 from app.services.project_export_service import ProjectExportError, export_recommended_3mf
 from app.services.report_service import build_summary, save_summary
 from app.services.model_import_service import ModelImportError, analyze_model
+from app.services.auto_slice_service import AutoSliceError, generate_gcode
+from app.services.slicer_service import SlicerServiceError, open_project, validate_slicer_path
 
 
 class MainWindow(tk.Tk):
@@ -92,6 +93,8 @@ class MainWindow(tk.Tk):
         actions.pack(anchor=tk.E, pady=(12, 0))
         ttk.Button(actions, text="Gerar resumo JSON", command=self._generate_summary).pack(side=tk.LEFT)
         ttk.Button(actions, text="Exportar 3MF com perfil", command=self._export_project).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(actions, text="Abrir no slicer", command=self._open_project_in_slicer).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(actions, text="Gerar G-code", command=self._generate_gcode).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(actions, text="Salvar configuracoes", command=self._save_settings).pack(side=tk.LEFT, padx=(8, 0))
 
     def _combo(self, parent: ttk.Frame, label: str, variable: tk.StringVar, values: list[str]) -> None:
@@ -117,6 +120,7 @@ class MainWindow(tk.Tk):
         ttk.Label(row, text="Fatiador", width=14).pack(side=tk.LEFT)
         ttk.Entry(row, textvariable=self.slicer_path).pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Button(row, text="Procurar", command=self._select_slicer).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(row, text="Validar", command=self._validate_slicer).pack(side=tk.LEFT, padx=(8, 0))
         row = ttk.Frame(frame)
         row.pack(fill=tk.X, pady=4)
         ttk.Label(row, text="Saida padrao", width=14).pack(side=tk.LEFT)
@@ -205,6 +209,48 @@ class MainWindow(tk.Tk):
         )
         self._open_slicer_if_requested(output_path)
 
+    def _open_project_in_slicer(self) -> None:
+        source = self.selected_file.get()
+        if not source:
+            messagebox.showerror("Arquivo obrigatorio", "Selecione um arquivo STL ou 3MF antes de abrir no slicer.")
+            return
+        try:
+            analysis, choices, profile = self._current_result()
+            output_path = Path(self.output_dir.get() or "exports") / f"{Path(source).stem}_kobra_s1_recomendado.3mf"
+            output_path = export_recommended_3mf(source, output_path, analysis, choices, profile)
+            open_project(self.slicer_path.get(), output_path)
+        except (ModelImportError, ProjectExportError, SlicerServiceError, ValueError) as exc:
+            self._show_error(str(exc))
+            return
+        messagebox.showinfo("Slicer", f"Projeto aberto no slicer:\n{output_path}")
+
+    def _generate_gcode(self) -> None:
+        source = self.selected_file.get()
+        if not source:
+            messagebox.showerror("Arquivo obrigatorio", "Selecione um arquivo STL ou 3MF antes de gerar G-code.")
+            return
+        try:
+            analysis, choices, profile = self._current_result()
+            result = generate_gcode(
+                self.slicer_path.get(),
+                source,
+                self.output_dir.get() or "exports",
+                analysis,
+                choices,
+                profile,
+            )
+        except (ModelImportError, AutoSliceError, ProjectExportError, ValueError) as exc:
+            self._show_error(str(exc))
+            return
+        self._set_text(self.error_view, _format_slice_result(result))
+        if result.success:
+            messagebox.showinfo("G-code gerado", f"G-code validado:\n{result.gcode_path}")
+        else:
+            messagebox.showwarning(
+                "G-code nao gerado",
+                "O slicer nao retornou um G-code valido. Veja a aba Erros para detalhes.",
+            )
+
     def _current_result(self):
         analysis = analyze_model(self.selected_file.get())
         try:
@@ -240,6 +286,21 @@ class MainWindow(tk.Tk):
         )
         messagebox.showinfo("Configuracoes", "Configuracoes salvas.")
 
+    def _validate_slicer(self) -> None:
+        try:
+            installation = validate_slicer_path(self.slicer_path.get())
+        except SlicerServiceError as exc:
+            self._show_error(str(exc))
+            return
+        self._set_text(
+            self.error_view,
+            "Slicer validado:\n"
+            f"Nome: {installation.name}\n"
+            f"Versao: {installation.version or 'nao identificada'}\n"
+            f"Executavel: {installation.executable}",
+        )
+        messagebox.showinfo("Slicer", "Slicer validado com sucesso.")
+
     def _set_text(self, widget: tk.Text, content: str) -> None:
         widget.configure(state=tk.NORMAL)
         widget.delete("1.0", tk.END)
@@ -254,11 +315,10 @@ class MainWindow(tk.Tk):
     def _open_slicer_if_requested(self, output_path: Path) -> None:
         if not self.auto_open_slicer.get():
             return
-        slicer = Path(self.slicer_path.get())
-        if not slicer.exists():
-            self._show_error("O caminho do slicer configurado nao existe.")
-            return
-        subprocess.Popen([str(slicer), str(output_path)])
+        try:
+            open_project(self.slicer_path.get(), output_path)
+        except SlicerServiceError as exc:
+            self._show_error(str(exc))
 
 
 def _format_analysis(analysis) -> str:
@@ -308,6 +368,34 @@ def _format_issues(analysis, profile=None) -> str:
     if profile is not None:
         issue_lines.extend(f"- [perfil] {warning}" for warning in profile.warnings)
     return "\n".join(issue_lines) or "Nenhum erro ou aviso relevante."
+
+
+def _format_slice_result(result) -> str:
+    lines = [
+        "Resultado do fatiamento automatico:",
+        f"Projeto: {result.project_path}",
+        f"Saida: {result.output_dir}",
+        f"Exit code: {result.command_result.exit_code}",
+        f"G-code: {result.gcode_path or 'nao gerado'}",
+    ]
+    if result.validation is not None:
+        lines.append(f"G-code valido: {'sim' if result.validation.is_valid else 'nao'}")
+        if result.validation.bounds_mm is not None:
+            lines.append(f"Limites de movimento: {result.validation.bounds_mm}")
+        if result.validation.estimated_time:
+            lines.append(f"Tempo estimado: {result.validation.estimated_time}")
+        if result.validation.filament_used:
+            lines.append(f"Filamento: {result.validation.filament_used}")
+        lines.extend(f"- {warning}" for warning in result.validation.warnings)
+    if result.command_result.stdout.strip():
+        lines.extend(["", "STDOUT:", result.command_result.stdout.strip()])
+    if result.command_result.stderr.strip():
+        lines.extend(["", "STDERR:", result.command_result.stderr.strip()])
+    if result.command_result.generated_files:
+        lines.append("")
+        lines.append("Arquivos gerados:")
+        lines.extend(f"- {path}" for path in result.command_result.generated_files)
+    return "\n".join(lines)
 
 
 def run_app() -> None:
