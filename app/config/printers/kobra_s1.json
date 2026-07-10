@@ -1,0 +1,8 @@
+{
+  "name": "Anycubic Kobra S1",
+  "build_volume_mm": [250, 250, 250],
+  "nozzle_diameter_mm": 0.4,
+  "max_nozzle_temp_c": 300,
+  "max_bed_temp_c": 120
+}
+

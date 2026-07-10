@@ -1,0 +1,16 @@
+{
+  "strength": {
+    "Decorativa": {"walls": 2, "infill_percent": 8, "top_bottom_layers": 3},
+    "Leve": {"walls": 3, "infill_percent": 12, "top_bottom_layers": 4},
+    "Uso comum": {"walls": 3, "infill_percent": 15, "top_bottom_layers": 4},
+    "Resistente": {"walls": 4, "infill_percent": 25, "top_bottom_layers": 5},
+    "Muito resistente": {"walls": 6, "infill_percent": 35, "top_bottom_layers": 6}
+  },
+  "quality": {
+    "Rapida": 0.28,
+    "Normal": 0.20,
+    "Detalhada": 0.16,
+    "Muito detalhada": 0.12
+  }
+}
+

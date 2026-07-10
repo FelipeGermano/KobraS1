@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kobra-s1-assistant"
+version = "0.1.0"
+description = "Assistente de configuracao para fatiamento na Anycubic Kobra S1."
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=1.26",
+  "trimesh>=4.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+

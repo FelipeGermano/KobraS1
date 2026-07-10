@@ -1,0 +1,28 @@
+{
+  "PLA": {
+    "nozzle_temp_c": 210,
+    "bed_temp_c": 60,
+    "fan_percent": 80
+  },
+  "PETG": {
+    "nozzle_temp_c": 240,
+    "bed_temp_c": 75,
+    "fan_percent": 40
+  },
+  "ABS": {
+    "nozzle_temp_c": 255,
+    "bed_temp_c": 100,
+    "fan_percent": 15
+  },
+  "ASA": {
+    "nozzle_temp_c": 260,
+    "bed_temp_c": 100,
+    "fan_percent": 20
+  },
+  "TPU": {
+    "nozzle_temp_c": 225,
+    "bed_temp_c": 50,
+    "fan_percent": 45
+  }
+}
+
