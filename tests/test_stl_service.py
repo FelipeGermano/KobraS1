@@ -25,6 +25,8 @@ endsolid test
     assert analysis.triangle_count == 1
     assert analysis.surface_area_mm2 == 100.0
     assert analysis.fits_printer is True
+    assert analysis.is_watertight is False
+    assert analysis.component_count == 1
 
 
 def test_model_larger_than_printer_is_flagged(tmp_path: Path) -> None:
@@ -48,3 +50,102 @@ endsolid test
     assert analysis.fits_printer is False
     assert any("excede" in warning for warning in analysis.warnings)
 
+
+def test_closed_cube_reports_watertight_volume(tmp_path: Path) -> None:
+    stl = tmp_path / "cube.stl"
+    stl.write_text(
+        """solid cube
+facet normal 0 0 -1
+ outer loop
+  vertex 0 0 0
+  vertex 0 10 0
+  vertex 10 10 0
+ endloop
+endfacet
+facet normal 0 0 -1
+ outer loop
+  vertex 0 0 0
+  vertex 10 10 0
+  vertex 10 0 0
+ endloop
+endfacet
+facet normal 0 0 1
+ outer loop
+  vertex 0 0 10
+  vertex 10 10 10
+  vertex 0 10 10
+ endloop
+endfacet
+facet normal 0 0 1
+ outer loop
+  vertex 0 0 10
+  vertex 10 0 10
+  vertex 10 10 10
+ endloop
+endfacet
+facet normal -1 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 0 10
+  vertex 0 10 10
+ endloop
+endfacet
+facet normal -1 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 10 10
+  vertex 0 10 0
+ endloop
+endfacet
+facet normal 1 0 0
+ outer loop
+  vertex 10 0 0
+  vertex 10 10 10
+  vertex 10 0 10
+ endloop
+endfacet
+facet normal 1 0 0
+ outer loop
+  vertex 10 0 0
+  vertex 10 10 0
+  vertex 10 10 10
+ endloop
+endfacet
+facet normal 0 -1 0
+ outer loop
+  vertex 0 0 0
+  vertex 10 0 10
+  vertex 0 0 10
+ endloop
+endfacet
+facet normal 0 -1 0
+ outer loop
+  vertex 0 0 0
+  vertex 10 0 0
+  vertex 10 0 10
+ endloop
+endfacet
+facet normal 0 1 0
+ outer loop
+  vertex 0 10 0
+  vertex 0 10 10
+  vertex 10 10 10
+ endloop
+endfacet
+facet normal 0 1 0
+ outer loop
+  vertex 0 10 0
+  vertex 10 10 10
+  vertex 10 10 0
+ endloop
+endfacet
+endsolid cube
+""",
+        encoding="utf-8",
+    )
+
+    analysis = analyze_stl(stl)
+
+    assert analysis.is_watertight is True
+    assert analysis.volume_mm3 == 1000.0
+    assert analysis.base_contact_area_mm2 == 100.0

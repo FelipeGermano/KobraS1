@@ -13,7 +13,17 @@ def _analysis() -> ModelAnalysis:
         volume_mm3=1000.0,
         surface_area_mm2=500.0,
         triangle_count=12,
-        is_watertight=None,
+        component_count=1,
+        is_watertight=True,
+        is_winding_consistent=True,
+        is_volume=True,
+        degenerate_face_count=0,
+        non_manifold_edge_count=0,
+        inverted_normal_likely=False,
+        thin_wall_warning=False,
+        base_contact_area_mm2=2500.0,
+        support_likely=False,
+        scale_suspect=False,
         fits_printer=True,
     )
 
@@ -51,4 +61,3 @@ def test_strength_priority_increases_walls_and_infill() -> None:
 
     assert profile.walls == 5
     assert profile.infill_percent == 33
-

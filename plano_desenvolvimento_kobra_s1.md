@@ -900,24 +900,24 @@ Mitigação:
 ### Configuração inicial
 
 - [x] Criar repositório Git.
-- [ ] Criar ambiente virtual.
+- [x] Criar ambiente virtual.
 - [x] Configurar `pyproject.toml`.
-- [ ] Instalar `trimesh`, `numpy` e `pytest`.
+- [x] Instalar `trimesh`, `numpy` e `pytest`.
 - [x] Criar estrutura de pastas.
 - [ ] Configurar logging.
-- [ ] Definir padrões de código.
-- [ ] Criar pipeline de testes.
+- [x] Definir padrões de código.
+- [x] Criar pipeline de testes.
 
 ### Modelos e arquivos
 
 - [x] Implementar leitura de STL.
-- [ ] Implementar leitura de 3MF.
-- [ ] Extrair geometria do 3MF.
-- [ ] Detectar metadados de impressora.
-- [ ] Ignorar configurações incompatíveis.
+- [x] Implementar leitura de 3MF.
+- [x] Extrair geometria do 3MF.
+- [x] Detectar metadados de impressora.
+- [x] Ignorar configurações incompatíveis.
 - [x] Calcular dimensões.
 - [x] Calcular volume.
-- [ ] Validar malha.
+- [x] Validar malha.
 
 ### Perfis
 
@@ -943,9 +943,9 @@ Mitigação:
 
 ### Integração
 
-- [ ] Localizar instalação do fatiador.
+- [x] Localizar instalação do fatiador.
 - [ ] Configurar caminho manual.
-- [ ] Testar comandos disponíveis.
+- [x] Testar comandos disponíveis.
 - [ ] Criar adaptador do fatiador.
 - [ ] Abrir modelo com perfil.
 - [ ] Capturar erros do processo.
@@ -953,9 +953,9 @@ Mitigação:
 
 ### Testes
 
-- [ ] Criar arquivos de teste.
+- [x] Criar arquivos de teste.
 - [x] Criar testes unitários.
-- [ ] Criar testes de integração.
+- [x] Criar testes de integração.
 - [ ] Executar testes físicos.
 - [ ] Registrar resultados.
 - [ ] Ajustar perfis.

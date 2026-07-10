@@ -8,7 +8,7 @@ from app.domain.material import MATERIALS
 from app.domain.slicing_profile import UserChoices
 from app.services.profile_engine import QUALITY_RULES, STRENGTH_RULES, build_profile
 from app.services.report_service import build_summary, save_summary
-from app.services.stl_service import StlReadError, analyze_stl
+from app.services.model_import_service import ModelImportError, analyze_model
 
 
 class MainWindow(tk.Tk):
@@ -24,7 +24,7 @@ class MainWindow(tk.Tk):
         self.quality = tk.StringVar(value="Normal")
         self.priority = tk.StringVar(value="equilibrio")
         self.supports_allowed = tk.BooleanVar(value=True)
-        self.analysis_text = tk.StringVar(value="Selecione um arquivo STL para comecar.")
+        self.analysis_text = tk.StringVar(value="Selecione um arquivo STL ou 3MF para comecar.")
 
         self._build_layout()
 
@@ -35,7 +35,7 @@ class MainWindow(tk.Tk):
         file_row = ttk.Frame(root)
         file_row.pack(fill=tk.X, pady=(0, 12))
         ttk.Entry(file_row, textvariable=self.selected_file).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(file_row, text="Selecionar STL", command=self._select_file).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(file_row, text="Selecionar modelo", command=self._select_file).pack(side=tk.LEFT, padx=(8, 0))
 
         form = ttk.LabelFrame(root, text="Opcoes de uso", padding=12)
         form.pack(fill=tk.X, pady=(0, 12))
@@ -75,8 +75,8 @@ class MainWindow(tk.Tk):
 
     def _select_file(self) -> None:
         path = filedialog.askopenfilename(
-            title="Selecione um STL",
-            filetypes=[("STL", "*.stl"), ("Todos os arquivos", "*.*")],
+            title="Selecione um STL ou 3MF",
+            filetypes=[("Modelos 3D", "*.stl *.3mf"), ("STL", "*.stl"), ("3MF", "*.3mf"), ("Todos os arquivos", "*.*")],
         )
         if path:
             self.selected_file.set(path)
@@ -84,8 +84,8 @@ class MainWindow(tk.Tk):
 
     def _refresh_analysis(self) -> None:
         try:
-            analysis = analyze_stl(self.selected_file.get())
-        except StlReadError as exc:
+            analysis = analyze_model(self.selected_file.get())
+        except ModelImportError as exc:
             self.analysis_text.set(str(exc))
             return
 
@@ -98,7 +98,7 @@ class MainWindow(tk.Tk):
             return
 
         try:
-            analysis = analyze_stl(source)
+            analysis = analyze_model(source)
             choices = UserChoices(
                 material=self.material.get(),
                 strength=self.strength.get(),
@@ -109,7 +109,7 @@ class MainWindow(tk.Tk):
             profile = build_profile(choices, analysis)
             summary = build_summary(analysis, choices, profile)
             output_path = save_summary(summary, Path("logs"))
-        except (StlReadError, ValueError) as exc:
+        except (ModelImportError, ValueError) as exc:
             messagebox.showerror("Nao foi possivel gerar", str(exc))
             return
 
@@ -125,6 +125,11 @@ def _format_analysis(analysis) -> str:
         f"Volume aproximado: {analysis.volume_mm3:.2f} mm3\n"
         f"Area superficial: {analysis.surface_area_mm2:.2f} mm2\n"
         f"Triangulos: {analysis.triangle_count}\n"
+        f"Componentes: {analysis.component_count}\n"
+        f"Malha fechada: {'sim' if analysis.is_watertight else 'nao'}\n"
+        f"Arestas nao-manifold: {analysis.non_manifold_edge_count}\n"
+        f"Area de contato: {analysis.base_contact_area_mm2:.2f} mm2\n"
+        f"Suportes provaveis: {'sim' if analysis.support_likely else 'nao'}\n"
         f"Cabe na Kobra S1: {'sim' if analysis.fits_printer else 'nao'}\n"
         f"Avisos:\n{warnings}"
     )
@@ -149,4 +154,3 @@ def _format_profile(profile) -> str:
 
 def run_app() -> None:
     MainWindow().mainloop()
-

@@ -4,29 +4,47 @@ Assistente inicial de fatiamento para a Anycubic Kobra S1.
 
 Esta versao 0.1 entrega:
 
-- leitura de arquivos STL;
-- calculo de dimensoes, volume aproximado e area superficial;
+- leitura de arquivos STL e 3MF;
+- bloqueio de G-code externo;
+- calculo de dimensoes, volume aproximado, area superficial e componentes;
+- validacao basica de malha: aberta, nao-manifold, faces degeneradas e orientacao;
 - validacao contra o volume de impressao de 250 x 250 x 250 mm;
-- perfis iniciais de PLA;
+- deteccao e ignorancia de metadados de impressora vindos de 3MF;
+- perfis iniciais de PLA, PETG, ABS, ASA e TPU;
 - regras de resistencia e qualidade;
 - resumo de parametros em JSON;
 - interface Tkinter simples.
 
+## Ambiente local
+
+Um ambiente virtual pode ser criado com:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+```
+
+Neste workspace, o `.venv` ja foi criado para teste local.
+
 ## Como executar
 
 ```powershell
-python -m app.main
+.\.venv\Scripts\python.exe -m app.main
 ```
 
 ## Testes
 
 ```powershell
-python -m pytest
+.\.venv\Scripts\python.exe -m pytest
 ```
 
-Se o `pytest` ainda nao estiver instalado:
+## Documentacao
 
-```powershell
-python -m pip install -e ".[dev]"
-```
+- `docs/architecture.md`: arquitetura inicial e regras de seguranca.
+- `docs/slicer_research.md`: pesquisa local do Anycubic Slicer Next.
+- `docs/test_models.md`: arquivos de amostra para testes manuais.
 
+## Amostras
+
+- `samples/calibration_cube_ascii.stl`
+- `samples/foreign_printer_cube.3mf`
