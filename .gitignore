@@ -4,6 +4,7 @@ __pycache__/
 pytest-cache-files-*/
 .venv/
 *.pyc
+*.egg-info/
 logs/*.log
 dist/
 build/
