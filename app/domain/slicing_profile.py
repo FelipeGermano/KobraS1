@@ -2,6 +2,24 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class CalibrationPlan:
+    temperature_tower: tuple[int, ...]
+    flow_ratio_steps: tuple[float, ...]
+    pressure_advance_steps: tuple[float, ...]
+    notes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StrengthConsumptionOption:
+    strength: str
+    walls: int
+    infill_percent: int
+    estimated_weight_g: float | None
+    estimated_cost: float | None
+    note: str
+
+
+@dataclass(frozen=True)
 class UserChoices:
     material: str
     strength: str
@@ -15,6 +33,12 @@ class UserChoices:
     stress_direction: str = "nao informado"
     copies: int = 1
     nozzle_diameter_mm: float = 0.4
+    custom_infill_enabled: bool = False
+    custom_infill_percent: int | None = None
+    filament_price_per_kg: float | None = None
+    enable_temperature_calibration: bool = False
+    enable_flow_calibration: bool = False
+    enable_pressure_advance_calibration: bool = False
 
 
 @dataclass(frozen=True)
@@ -36,6 +60,10 @@ class SlicingProfile:
     supports: bool
     support_style: str
     estimated_weight_g: float | None
+    estimated_total_weight_g: float | None
+    estimated_cost: float | None
     estimated_cost_note: str
+    calibration_plan: CalibrationPlan
+    strength_consumption_options: tuple[StrengthConsumptionOption, ...]
     decision_reasons: tuple[str, ...]
     warnings: tuple[str, ...]

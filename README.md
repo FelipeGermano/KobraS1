@@ -16,6 +16,10 @@ Esta versao 0.1 entrega:
 - exportacao de projeto 3MF com perfil recomendado embutido;
 - abertura do projeto no Anycubic Slicer Next;
 - geracao automatica de G-code quando o CLI do slicer aceita o modelo;
+- assistentes de calibracao de temperatura, flow ratio e pressure advance;
+- preenchimento customizado por porcentagem;
+- estimativa de custo por preco do kg de filamento;
+- comparacao entre resistencia e consumo;
 - interface Tkinter com abas de analise, perfil, erros e configuracoes.
 
 ## Ambiente local

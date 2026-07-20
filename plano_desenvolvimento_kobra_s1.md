@@ -873,14 +873,14 @@ Mitigação:
 
 ## 17. Melhorias futuras
 
-- assistente de calibração de temperatura;
-- assistente de flow ratio;
-- assistente de pressure advance;
+- assistente de calibração de temperatura (implementado inicialmente);
+- assistente de flow ratio (implementado inicialmente);
+- assistente de pressure advance (implementado inicialmente);
 - cadastro de marcas de filamento;
 - leitura de QR Code do rolo;
 - perfis por cor e lote;
-- comparação entre resistência e consumo;
-- estimativa de custo;
+- comparação entre resistência e consumo (implementado inicialmente);
+- estimativa de custo (implementado inicialmente);
 - armazenamento do histórico;
 - recomendação baseada em impressões anteriores;
 - integração com câmera;

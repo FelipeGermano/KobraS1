@@ -42,6 +42,12 @@ class MainWindow(tk.Tk):
         self.stress_direction = tk.StringVar(value="nao informado")
         self.copies = tk.IntVar(value=1)
         self.nozzle = tk.StringVar(value="0.4")
+        self.custom_infill_enabled = tk.BooleanVar(value=False)
+        self.custom_infill_percent = tk.IntVar(value=15)
+        self.filament_price_per_kg = tk.StringVar(value="")
+        self.temperature_calibration = tk.BooleanVar(value=False)
+        self.flow_calibration = tk.BooleanVar(value=False)
+        self.pressure_advance_calibration = tk.BooleanVar(value=False)
         self.supports_allowed = tk.BooleanVar(value=True)
         settings = load_json_config("app_settings.json")
         self.slicer_path = tk.StringVar(value=settings.get("slicer_path", ""))
@@ -75,11 +81,28 @@ class MainWindow(tk.Tk):
         ttk.Spinbox(numeric, from_=1, to=99, textvariable=self.copies, width=8).pack(side=tk.LEFT)
         ttk.Label(numeric, text="Bico", width=8).pack(side=tk.LEFT, padx=(12, 0))
         ttk.Combobox(numeric, textvariable=self.nozzle, values=["0.4"], state="readonly", width=8).pack(side=tk.LEFT)
+        ttk.Label(numeric, text="R$/kg", width=8).pack(side=tk.LEFT, padx=(12, 0))
+        ttk.Entry(numeric, textvariable=self.filament_price_per_kg, width=10).pack(side=tk.LEFT)
+        infill_row = ttk.Frame(form)
+        infill_row.pack(fill=tk.X, pady=3)
+        ttk.Checkbutton(infill_row, text="Preenchimento customizado (%)", variable=self.custom_infill_enabled).pack(
+            side=tk.LEFT
+        )
+        ttk.Spinbox(infill_row, from_=0, to=100, textvariable=self.custom_infill_percent, width=8).pack(
+            side=tk.LEFT, padx=(8, 0)
+        )
         ttk.Checkbutton(form, text="Permitir suportes quando recomendados", variable=self.supports_allowed).pack(
             anchor=tk.W, pady=(6, 0)
         )
         ttk.Checkbutton(form, text="Exposto a calor/sol", variable=self.heat_exposure).pack(anchor=tk.W)
         ttk.Checkbutton(form, text="Precisa ser flexivel", variable=self.needs_flexibility).pack(anchor=tk.W)
+        calib = ttk.LabelFrame(form, text="Assistentes de calibracao", padding=8)
+        calib.pack(fill=tk.X, pady=(6, 0))
+        ttk.Checkbutton(calib, text="Temperatura", variable=self.temperature_calibration).pack(side=tk.LEFT)
+        ttk.Checkbutton(calib, text="Flow ratio", variable=self.flow_calibration).pack(side=tk.LEFT, padx=(12, 0))
+        ttk.Checkbutton(calib, text="Pressure advance", variable=self.pressure_advance_calibration).pack(
+            side=tk.LEFT, padx=(12, 0)
+        )
 
         self.tabs = ttk.Notebook(root)
         self.tabs.pack(fill=tk.BOTH, expand=True)
@@ -256,8 +279,10 @@ class MainWindow(tk.Tk):
         try:
             copies = int(self.copies.get())
             nozzle = float(self.nozzle.get())
+            custom_infill = int(self.custom_infill_percent.get())
+            price = _optional_float(self.filament_price_per_kg.get())
         except (TypeError, ValueError) as exc:
-            raise ValueError("Copias e bico devem ser numeros validos.") from exc
+            raise ValueError("Copias, bico, preenchimento e preco devem ser numeros validos.") from exc
         choices = UserChoices(
             material=self.material.get(),
             strength=self.strength.get(),
@@ -271,6 +296,12 @@ class MainWindow(tk.Tk):
             stress_direction=self.stress_direction.get(),
             copies=copies,
             nozzle_diameter_mm=nozzle,
+            custom_infill_enabled=self.custom_infill_enabled.get(),
+            custom_infill_percent=custom_infill,
+            filament_price_per_kg=price,
+            enable_temperature_calibration=self.temperature_calibration.get(),
+            enable_flow_calibration=self.flow_calibration.get(),
+            enable_pressure_advance_calibration=self.pressure_advance_calibration.get(),
         )
         profile = build_profile(choices, analysis)
         return analysis, choices, profile
@@ -343,6 +374,12 @@ def _format_profile(profile) -> str:
     warnings = "\n".join(f"- {warning}" for warning in profile.warnings) or "- Nenhum aviso."
     reasons = "\n".join(f"- {reason}" for reason in profile.decision_reasons) or "- Sem justificativas."
     weight = f"{profile.estimated_weight_g:.2f} g" if profile.estimated_weight_g is not None else "indisponivel"
+    total_weight = (
+        f"{profile.estimated_total_weight_g:.2f} g" if profile.estimated_total_weight_g is not None else "indisponivel"
+    )
+    cost = f"R$ {profile.estimated_cost:.2f}" if profile.estimated_cost is not None else "indisponivel"
+    calibration = _format_calibration(profile)
+    comparison = _format_strength_consumption(profile)
     return (
         "Perfil recomendado:\n"
         f"Material: {profile.material}\n"
@@ -354,7 +391,12 @@ def _format_profile(profile) -> str:
         f"Velocidade base: {profile.speed_mm_s} mm/s\n"
         f"Aderencia: {profile.adhesion_type}\n"
         f"Suportes: {'sim' if profile.supports else 'nao'} ({profile.support_style})\n"
-        f"Peso estimado: {weight}\n"
+        f"Peso estimado por peca: {weight}\n"
+        f"Peso total estimado: {total_weight}\n"
+        f"Custo estimado: {cost}\n"
+        f"{profile.estimated_cost_note}\n"
+        f"\nAssistentes de calibracao:\n{calibration}\n"
+        f"\nComparacao resistencia x consumo:\n{comparison}\n"
         f"Justificativas:\n{reasons}\n"
         f"Avisos finais:\n{warnings}"
     )
@@ -417,6 +459,37 @@ def _friendly_slice_diagnosis(result) -> str:
     if result.validation is not None and not result.validation.is_valid:
         return "O G-code foi criado, mas falhou na validacao de seguranca do assistente."
     return ""
+
+
+def _optional_float(value: str) -> float | None:
+    cleaned = value.strip().replace(",", ".")
+    if not cleaned:
+        return None
+    return float(cleaned)
+
+
+def _format_calibration(profile) -> str:
+    plan = profile.calibration_plan
+    lines: list[str] = []
+    if plan.temperature_tower:
+        lines.append("Temperatura: " + ", ".join(f"{temp} C" for temp in plan.temperature_tower))
+    if plan.flow_ratio_steps:
+        lines.append("Flow ratio: " + ", ".join(f"{step:.2f}" for step in plan.flow_ratio_steps))
+    if plan.pressure_advance_steps:
+        lines.append("Pressure advance: " + ", ".join(f"{step:.2f}" for step in plan.pressure_advance_steps))
+    lines.extend(f"- {note}" for note in plan.notes)
+    return "\n".join(lines)
+
+
+def _format_strength_consumption(profile) -> str:
+    lines = []
+    for option in profile.strength_consumption_options:
+        weight = f"{option.estimated_weight_g:.2f} g" if option.estimated_weight_g is not None else "?"
+        cost = f"R$ {option.estimated_cost:.2f}" if option.estimated_cost is not None else "custo indisponivel"
+        lines.append(
+            f"- {option.strength}: {option.walls} paredes, {option.infill_percent}% infill, {weight}, {cost} ({option.note})"
+        )
+    return "\n".join(lines)
 
 
 def run_app() -> None:

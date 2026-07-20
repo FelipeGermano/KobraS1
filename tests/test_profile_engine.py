@@ -117,3 +117,81 @@ def test_rejects_non_default_nozzle_for_mvp() -> None:
         assert "0,4 mm" in str(exc)
     else:
         raise AssertionError("Bico diferente de 0,4 mm deveria ser rejeitado no MVP")
+
+
+def test_custom_infill_overrides_strength_rule() -> None:
+    profile = build_profile(
+        UserChoices(
+            material="PLA",
+            strength="Uso comum",
+            quality="Normal",
+            priority="equilibrio",
+            supports_allowed=True,
+            custom_infill_enabled=True,
+            custom_infill_percent=42,
+        ),
+        _analysis(),
+    )
+
+    assert profile.infill_percent == 42
+    assert any("Preenchimento customizado" in reason for reason in profile.decision_reasons)
+
+
+def test_estimates_total_weight_and_cost() -> None:
+    profile = build_profile(
+        UserChoices(
+            material="PLA",
+            strength="Uso comum",
+            quality="Normal",
+            priority="equilibrio",
+            supports_allowed=True,
+            copies=2,
+            filament_price_per_kg=100.0,
+        ),
+        _analysis(),
+    )
+
+    assert profile.estimated_weight_g is not None
+    assert profile.estimated_total_weight_g == round(profile.estimated_weight_g * 2, 2)
+    assert profile.estimated_cost == round((profile.estimated_total_weight_g / 1000) * 100.0, 2)
+
+
+def test_builds_calibration_assistants() -> None:
+    profile = build_profile(
+        UserChoices(
+            material="PETG",
+            strength="Uso comum",
+            quality="Normal",
+            priority="equilibrio",
+            supports_allowed=True,
+            enable_temperature_calibration=True,
+            enable_flow_calibration=True,
+            enable_pressure_advance_calibration=True,
+        ),
+        _analysis(),
+    )
+
+    assert profile.calibration_plan.temperature_tower == (225, 230, 235, 240, 245, 250)
+    assert 1.0 in profile.calibration_plan.flow_ratio_steps
+    assert 0.04 in profile.calibration_plan.pressure_advance_steps
+    assert len(profile.strength_consumption_options) == 5
+
+
+def test_rejects_invalid_custom_infill() -> None:
+    try:
+        build_profile(
+            UserChoices(
+                material="PLA",
+                strength="Uso comum",
+                quality="Normal",
+                priority="equilibrio",
+                supports_allowed=True,
+                custom_infill_enabled=True,
+                custom_infill_percent=120,
+            ),
+            _analysis(),
+        )
+    except ValueError as exc:
+        assert "Preenchimento customizado" in str(exc)
+    else:
+        raise AssertionError("Preenchimento fora de 0-100 deveria ser rejeitado")

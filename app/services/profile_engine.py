@@ -1,7 +1,12 @@
 from app.domain.material import MATERIALS, MaterialProfile
 from app.domain.model_analysis import ModelAnalysis
 from app.domain.printer import KOBRA_S1, PrinterProfile
-from app.domain.slicing_profile import SlicingProfile, UserChoices
+from app.domain.slicing_profile import (
+    CalibrationPlan,
+    SlicingProfile,
+    StrengthConsumptionOption,
+    UserChoices,
+)
 from app.services.config_service import load_json_config
 
 
@@ -80,6 +85,12 @@ def build_profile(
         infill = max(8, infill - 5)
         reasons.append("Economia de material reduziu preenchimento dentro do limite seguro.")
 
+    if choices.custom_infill_enabled:
+        if choices.custom_infill_percent is None:
+            raise ValueError("Preenchimento customizado precisa de um percentual.")
+        infill = choices.custom_infill_percent
+        reasons.append(f"Preenchimento customizado aplicado: {infill}%.")
+
     if choices.purpose in {"funcional", "externo"}:
         walls = max(walls, 4)
         infill = max(infill, 20)
@@ -112,6 +123,10 @@ def build_profile(
     if choices.copies > 1:
         reasons.append(f"Quantidade solicitada: {choices.copies} copias; confirme distribuicao no slicer.")
 
+    estimated_weight = _estimate_weight(analysis, material, infill)
+    total_weight = round(estimated_weight * choices.copies, 2) if estimated_weight is not None else None
+    estimated_cost = _estimate_cost(total_weight, choices.filament_price_per_kg)
+
     return SlicingProfile(
         printer=printer.name,
         material=material.name,
@@ -129,8 +144,14 @@ def build_profile(
         adhesion_type=adhesion_type,
         supports=supports,
         support_style=support_style,
-        estimated_weight_g=_estimate_weight(analysis, material, infill),
-        estimated_cost_note="Estimativa de peso usa volume do modelo e densidade media; confira no slicer.",
+        estimated_weight_g=estimated_weight,
+        estimated_total_weight_g=total_weight,
+        estimated_cost=estimated_cost,
+        estimated_cost_note=_cost_note(choices),
+        calibration_plan=_build_calibration_plan(material, choices),
+        strength_consumption_options=tuple(
+            _strength_consumption_options(analysis, material, choices.filament_price_per_kg)
+        ),
         decision_reasons=tuple(dict.fromkeys(reasons)),
         warnings=tuple(dict.fromkeys(warnings)),
     )
@@ -179,6 +200,11 @@ def _validate_choices(choices: UserChoices, printer: PrinterProfile) -> None:
         raise ValueError("Quantidade de copias deve ser pelo menos 1.")
     if abs(choices.nozzle_diameter_mm - printer.nozzle_diameter_mm) > 0.001:
         raise ValueError("O MVP aceita apenas o bico de 0,4 mm da Kobra S1.")
+    if choices.custom_infill_enabled:
+        if choices.custom_infill_percent is None or not 0 <= choices.custom_infill_percent <= 100:
+            raise ValueError("Preenchimento customizado deve ficar entre 0% e 100%.")
+    if choices.filament_price_per_kg is not None and choices.filament_price_per_kg < 0:
+        raise ValueError("Preco do filamento nao pode ser negativo.")
 
 
 def _material_profile(name: str) -> MaterialProfile | None:
@@ -195,3 +221,66 @@ def _material_profile(name: str) -> MaterialProfile | None:
         base_speed_mm_s=fallback.base_speed_mm_s if fallback else 80,
         warnings=fallback.warnings if fallback else (),
     )
+
+
+def _estimate_cost(total_weight_g: float | None, price_per_kg: float | None) -> float | None:
+    if total_weight_g is None or price_per_kg is None:
+        return None
+    return round((total_weight_g / 1000.0) * price_per_kg, 2)
+
+
+def _cost_note(choices: UserChoices) -> str:
+    if choices.filament_price_per_kg is None:
+        return "Informe o preco do kg do filamento para estimar custo."
+    return "Custo estimado usa peso aproximado e preco informado por kg; confira consumo final no slicer."
+
+
+def _build_calibration_plan(material: MaterialProfile, choices: UserChoices) -> CalibrationPlan:
+    temp_ranges = {
+        "PLA": (195, 200, 205, 210, 215, 220),
+        "PETG": (225, 230, 235, 240, 245, 250),
+        "ABS": (240, 245, 250, 255, 260, 265),
+        "ASA": (245, 250, 255, 260, 265, 270),
+        "TPU": (210, 215, 220, 225, 230, 235),
+    }
+    notes: list[str] = []
+    temperatures = temp_ranges.get(material.name, (material.nozzle_temp_c - 10, material.nozzle_temp_c, material.nozzle_temp_c + 10))
+    if choices.enable_temperature_calibration:
+        notes.append("Imprima uma torre de temperatura e escolha o trecho com melhor adesao entre camadas, menor stringing e bom acabamento.")
+    if choices.enable_flow_calibration:
+        notes.append("Imprima cubo de parede simples, meca espessura media e ajuste flow ratio proporcionalmente.")
+    if choices.enable_pressure_advance_calibration:
+        notes.append("Imprima padrao de linhas/cantos e escolha o pressure advance com cantos definidos sem subextrusao.")
+    if not notes:
+        notes.append("Assistentes de calibracao desativados; usando valores iniciais seguros.")
+    return CalibrationPlan(
+        temperature_tower=tuple(temperatures if choices.enable_temperature_calibration else ()),
+        flow_ratio_steps=(0.92, 0.94, 0.96, 0.98, 1.00, 1.02, 1.04) if choices.enable_flow_calibration else (),
+        pressure_advance_steps=(0.00, 0.02, 0.04, 0.06, 0.08, 0.10) if choices.enable_pressure_advance_calibration else (),
+        notes=tuple(notes),
+    )
+
+
+def _strength_consumption_options(
+    analysis: ModelAnalysis,
+    material: MaterialProfile,
+    price_per_kg: float | None,
+) -> list[StrengthConsumptionOption]:
+    options: list[StrengthConsumptionOption] = []
+    for name, rule in STRENGTH_RULES.items():
+        walls = int(rule["walls"])
+        infill = int(rule.get("infill", rule.get("infill_percent", 15)))
+        weight = _estimate_weight(analysis, material, infill)
+        cost = _estimate_cost(weight, price_per_kg)
+        note = "menor consumo" if infill <= 12 else "equilibrado" if infill <= 20 else "maior resistencia e consumo"
+        options.append(
+            StrengthConsumptionOption(
+                strength=name,
+                walls=walls,
+                infill_percent=infill,
+                estimated_weight_g=weight,
+                estimated_cost=cost,
+                note=note,
+            )
+        )
+    return options
