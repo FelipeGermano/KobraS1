@@ -15,6 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "pyinstaller>=6.21",
   "pytest>=8.2",
 ]
 
